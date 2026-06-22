@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eagle Catering — Drinks Quantity Calculator</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  body { margin: 0; font-family: 'Manrope', sans-serif; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+const EVENT_TYPES = ['Wedding', 'Corporate', 'Private Party', 'Funeral'];
+
+const DRINK_DEFS = [
+  { key: 'softdrinks', label: 'Soft Drinks (cans)', unit: 'can', packLabel: 'pack', defaultPackSize: 24 },
+  { key: 'water1l', label: 'Water — 1L Glass Bottle', unit: 'bottle', packLabel: 'case', defaultPackSize: 12 },
+  { key: 'water330', label: 'Water — 330ml Plastic Bottle', unit: 'bottle', packLabel: 'case', defaultPackSize: 24 },
+  { key: 'wine', label: 'Wine (75cl bottle)', unit: 'bottle', packLabel: 'case', defaultPackSize: 6 },
+  { key: 'juice', label: 'Juice Cartons', unit: 'carton', packLabel: 'pack', defaultPackSize: 12 },
+];
+
+// Default per-guest rates by event type.
+// Wedding / Corporate / Private Party derived from published catering-industry
+// per-guest-per-hour consumption guidance for a ~4hr event.
+// Funeral column is NOT sourced from any industry data — placeholder estimate only.
+const DEFAULT_RATES = {
+  softdrinks:  { Wedding: 1.65, Corporate: 1.0, 'Private Party': 1.5, Funeral: 0.5 },
+  water1l:     { Wedding: 0.3,  Corporate: 0.3, 'Private Party': 0.3, Funeral: 0.2 },
+  water330:    { Wedding: 0.5,  Corporate: 0.6, 'Private Party': 0.5, Funeral: 0.3 },
+  wine:        { Wedding: 0.77, Corporate: 0,   'Private Party': 0.6, Funeral: 0.1 },
+  juice:       { Wedding: 0.5,  Corporate: 0.4, 'Private Party': 0.5, Funeral: 0.3 },
+};
+
+function buildInitialPackSizes() {
+  const sizes = {};
+  DRINK_DEFS.forEach(d => { sizes[d.key] = d.defaultPackSize; });
+  return sizes;
+}
+
+function buildInitialSelection() {
+  const sel = {};
+  DRINK_DEFS.forEach(d => { sel[d.key] = true; });
+  return sel;
+}
+
+function DrinksCalculator() {
+  const [eventType, setEventType] = useState('Wedding');
+  const [guests, setGuests] = useState(100);
+  const [duration, setDuration] = useState(4);
+  const [selected, setSelected] = useState(buildInitialSelection());
+  const [rates, setRates] = useState(DEFAULT_RATES);
+  const [packSizes, setPackSizes] = useState(buildInitialPackSizes());
+  const [showRateEditor, setShowRateEditor] = useState(false);
+
+  const guestCount = Math.max(0, Number(guests) || 0);
+
+  const results = useMemo(() => {
+    return DRINK_DEFS.filter(d => selected[d.key]).map(d => {
+      const rate = rates[d.key][eventType];
+      const rawUnits = guestCount * rate;
+      const unitsNeeded = Math.ceil(rawUnits);
+      const packSize = Math.max(1, Number(packSizes[d.key]) || 1);
+      const packsNeeded = unitsNeeded > 0 ? Math.ceil(unitsNeeded / packSize) : 0;
+      const unitsFromPacks = packsNeeded * packSize;
+      return { ...d, rate, rawUnits, unitsNeeded, packSize, packsNeeded, unitsFromPacks };
+    });
+  }, [selected, rates, eventType, guestCount, packSizes]);
+
+  function updateRate(drinkKey, evt, value) {
+    setRates(prev => ({
+      ...prev,
+      [drinkKey]: { ...prev[drinkKey], [evt]: value === '' ? 0 : parseFloat(value) }
+    }));
+  }
+
+  function updatePackSize(drinkKey, value) {
+    setPackSizes(prev => ({ ...prev, [drinkKey]: value === '' ? '' : parseInt(value, 10) }));
+  }
+
+  function toggleDrink(key) {
+    setSelected(prev => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  return (
+    <div style={{ fontFamily: "'Manrope', sans-serif" }} className="min-h-screen bg-stone-50 text-stone-900">
+      <div className="max-w-4xl mx-auto px-5 py-10">
+
+        <header className="mb-8 border-b border-stone-300 pb-6">
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-1">Eagle Catering</p>
+          <h1 style={{ fontFamily: "'Fraunces', serif" }} className="text-3xl sm:text-4xl font-semibold text-stone-900">
+            Drinks Quantity Calculator
+          </h1>
+          <p className="text-stone-600 text-sm mt-2">
+            Set your event details, choose which drinks you're ordering, and get the exact quantity — in units and full packs — to buy.
+          </p>
+        </header>
+
+        <section className="bg-white rounded-lg border border-stone-200 p-5 sm:p-6 mb-6 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500 mb-1.5">
+                Event type
+              </label>
+              <select
+                value={eventType}
+                onChange={e => setEventType(e.target.value)}
+                className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
+              >
+                {EVENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500 mb-1.5">
+                Number of guests
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={guests}
+                onChange={e => setGuests(e.target.value)}
+                className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500 mb-1.5">
+                Event duration (hrs)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={duration}
+                onChange={e => setDuration(e.target.value)}
+                className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
+              />
+              <p className="text-[11px] text-stone-500 mt-1">For reference only — see note below.</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500 mb-2">
+              Drinks to include
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {DRINK_DEFS.map(d => (
+                <label key={d.key} className="flex items-center gap-2 border border-stone-200 rounded-md px-3 py-2 cursor-pointer hover:bg-stone-50">
+                  <input
+                    type="checkbox"
+                    checked={!!selected[d.key]}
+                    onChange={() => toggleDrink(d.key)}
+                    className="w-4 h-4 accent-stone-700"
+                  />
+                  <span className="text-sm">{d.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="text-xs text-stone-600 bg-stone-100 border border-stone-200 rounded-md px-4 py-3 mb-6">
+          Base rates below assume a roughly 4-hour event. For longer events, industry guidance suggests adding
+          approximately <strong>0.75 drinks per guest per additional hour</strong> beyond the first four; scale down
+          for shorter events. This calculator does not auto-adjust for duration — increase the rates manually in the
+          editor below if your event runs longer or shorter.
+        </div>
+
+        <section className="mb-6">
+          <h2 style={{ fontFamily: "'Fraunces', serif" }} className="text-xl font-semibold mb-3">
+            Order quantities — {eventType}, {guestCount} guest{guestCount === 1 ? '' : 's'}
+          </h2>
+
+          {results.length === 0 ? (
+            <p className="text-sm text-stone-500 italic border border-dashed border-stone-300 rounded-md px-4 py-6 text-center">
+              No drinks selected. Choose at least one drink above to see quantities.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {results.map(r => (
+                <div key={r.key} className="bg-white border border-stone-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-stone-900 text-sm">{r.label}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {guestCount} guests × {r.rate} {r.unit}/guest = {r.rawUnits.toFixed(2)} → rounded up to {r.unitsNeeded} {r.unit}{r.unitsNeeded === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p style={{ fontFamily: "'Fraunces', serif" }} className="text-lg font-semibold text-stone-900">
+                      {r.packsNeeded} {r.packLabel}{r.packsNeeded === 1 ? '' : 's'}
+                    </p>
+                    <p className="text-xs text-stone-500">
+                      ({r.packSize}/{r.packLabel}) = {r.unitsFromPacks} {r.unit}s total
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <button
+          onClick={() => setShowRateEditor(s => !s)}
+          className="text-sm font-medium text-stone-700 underline hover:text-stone-900 mb-4"
+        >
+          {showRateEditor ? 'Hide' : 'Show'} consumption rates &amp; pack sizes (editable)
+        </button>
+
+        {showRateEditor && (
+          <section className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 mb-6 overflow-x-auto">
+            <div className="mb-4 text-xs leading-relaxed bg-amber-50 border border-amber-200 rounded-md px-4 py-3 text-amber-900">
+              <strong>Sourcing note:</strong> Wedding, Corporate, and Private Party rates are derived from published
+              catering-industry per-guest-per-hour consumption guidance for a ~4-hour event. The <strong>Funeral</strong>{' '}
+              column is <strong>not based on any sourced data</strong> — it is an unverified placeholder. Adjust it
+              based on your own experience before relying on it. All figures are starting points — edit any cell to
+              match your own observed consumption.
+            </div>
+
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b border-stone-300">
+                  <th className="text-left py-2 pr-3 font-semibold text-stone-700">Drink</th>
+                  {EVENT_TYPES.map(t => (
+                    <th key={t} className="text-left py-2 px-2 font-semibold text-stone-700">
+                      {t}{t === 'Funeral' ? <span className="text-amber-600" title="Unverified estimate">*</span> : ''}
+                    </th>
+                  ))}
+                  <th className="text-left py-2 pl-3 font-semibold text-stone-700">Pack size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DRINK_DEFS.map(d => (
+                  <tr key={d.key} className="border-b border-stone-100">
+                    <td className="py-2 pr-3 text-stone-800">{d.label}</td>
+                    {EVENT_TYPES.map(t => (
+                      <td key={t} className="py-2 px-2">
+                        <input
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          value={rates[d.key][t]}
+                          onChange={e => updateRate(d.key, t, e.target.value)}
+                          className={`w-20 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 ${
+                            t === 'Funeral' ? 'border-amber-300 bg-amber-50' : 'border-stone-300'
+                          }`}
+                        />
+                      </td>
+                    ))}
+                    <td className="py-2 pl-3">
+                      <input
+                        type="number"
+                        min="1"
+                        value={packSizes[d.key]}
+                        onChange={e => updatePackSize(d.key, e.target.value)}
+                        className="w-20 border border-stone-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-stone-500 mt-3">
+              * Rate = units per guest for the selected event type, scaled for a ~4hr event. Changes apply immediately and last for this session only.
+            </p>
+          </section>
+        )}
+
+        <footer className="text-xs text-stone-400 text-center pt-4 border-t border-stone-200">
+          Eagle Catering internal tool — session only, no data is saved between visits.
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<DrinksCalculator />);
+</script>
+
+</body>
+</html>
